@@ -64,7 +64,8 @@ def shell(cmd: str) -> str:
 
 # --- Command handlers ---
 
-def cmd_status() -> str:    uptime   = shell("uptime -p")
+def cmd_status() -> str:
+    uptime   = shell("uptime -p")
     load_avg = shell("uptime | awk -F'load average:' '{print $2}'").strip()
     mem      = shell(
         "free -m | awk '/^Mem:/{printf \"Terpakai %s MB / %s MB (%.0f%%)\","
