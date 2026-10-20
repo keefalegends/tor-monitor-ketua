@@ -1,0 +1,15 @@
+[Unit]
+Description=Tor Monitor - Telegram Bot Interaktif
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/tor-monitor/scripts/bot.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:/var/log/tor-monitor.log
+StandardError=append:/var/log/tor-monitor.log
+
+[Install]
+WantedBy=multi-user.target
