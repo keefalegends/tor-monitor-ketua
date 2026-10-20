@@ -1,0 +1,11 @@
+# Secret files
+.env
+
+# Log files
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
