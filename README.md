@@ -1,6 +1,6 @@
 # tor-monitor-ketua
 
-Monitor ringan untuk VPS Ubuntu menggunakan Bash + Telegram Bot API. Tanpa Prometheus, tanpa Grafana, cukup `curl` dan `cron`.
+Monitor ringan untuk VPS Ubuntu menggunakan Bash + Telegram Bot API.  `curl` dan `cron`.
 
 ## Fitur
 
