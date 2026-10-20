@@ -144,19 +144,6 @@ Cron (*/5 menit)
 
 Cooldown disimpan di `/tmp/tor-monitor/<key>` berisi timestamp terakhir alert. Saat kondisi normal kembali, file cooldown dihapus otomatis agar alert bisa muncul lagi saat masalah berikutnya.
 
-## Keamanan
-
-- Token dan Chat ID **tidak pernah** di-commit. File `.env` masuk `.gitignore`.
-- File `.env` di VPS diberi permission `600` (hanya root yang bisa baca).
-- Alert SSH hanya menginformasikan, tidak memblokir akses.
-
-## Pengembangan Selanjutnya
-
-- [ ] Bot interaktif: `/status`, `/containers` (Python + python-telegram-bot)
-- [ ] Alert CPU spike
-- [ ] Logrotate untuk `/var/log/tor-monitor.log`
-- [ ] Diagram arsitektur di `docs/`
-
 ## Lisensi
 
 MIT
