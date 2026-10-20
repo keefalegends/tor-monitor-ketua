@@ -64,8 +64,7 @@ def shell(cmd: str) -> str:
 
 # --- Command handlers ---
 
-def cmd_status() -> str:
-    uptime   = shell("uptime -p")
+def cmd_status() -> str:    uptime   = shell("uptime -p")
     load_avg = shell("uptime | awk -F'load average:' '{print $2}'").strip()
     mem      = shell(
         "free -m | awk '/^Mem:/{printf \"Terpakai %s MB / %s MB (%.0f%%)\","
@@ -106,10 +105,42 @@ def cmd_containers() -> str:
     return "\n".join(lines)
 
 
+def cmd_cpu() -> str:
+    """Baca /proc/stat dua kali (jeda 1 detik) untuk CPU usage akurat."""
+    import time as _time
+
+    def read_stat():
+        with open("/proc/stat") as f:
+            line = f.readline()
+        fields = list(map(int, line.split()[1:]))
+        total = sum(fields)
+        idle  = fields[3]
+        return total, idle
+
+    t1, i1 = read_stat()
+    _time.sleep(1)
+    t2, i2 = read_stat()
+
+    delta_total = t2 - t1
+    delta_idle  = i2 - i1
+    pct_used    = (delta_total - delta_idle) * 100 // delta_total if delta_total else 0
+
+    load_avg = shell("uptime | awk -F'load average:' '{print $2}'").strip()
+    cores    = shell("nproc")
+
+    return (
+        f"⚡ <b>CPU</b>\n\n"
+        f"Penggunaan : <b>{pct_used}%</b>\n"
+        f"Load avg   :{load_avg}\n"
+        f"Core       : {cores}"
+    )
+
+
 def cmd_help() -> str:
     return (
         "🤖 <b>Tor Monitor Bot</b>\n\n"
         "/status      — RAM, disk, swap, uptime\n"
+        "/cpu         — penggunaan CPU real-time\n"
         "/containers  — daftar semua container Docker\n"
         "/help        — pesan ini"
     )
@@ -117,6 +148,7 @@ def cmd_help() -> str:
 
 HANDLERS = {
     "/status":     cmd_status,
+    "/cpu":        cmd_cpu,
     "/containers": cmd_containers,
     "/help":       cmd_help,
 }
