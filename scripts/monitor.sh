@@ -91,8 +91,8 @@ check_disk() {
             key="disk_full_$(echo "$mount" | tr '/' '_')"
             rm -f "${COOLDOWN_DIR}/${key}"
         fi
-    done < <(df -h --output=source,fstype,size,used,pcent,target \
-        | awk 'NR>1 && $2!="tmpfs" && $2!="devtmpfs" && $2!="squashfs" {print}')
+    done < <(df -h --output=source,fstype,size,used,pcent,target 2>/dev/null \
+        | awk 'NR>1 && $2!="tmpfs" && $2!="devtmpfs" && $2!="squashfs" {print}') || true
 }
 
 # Cek swap usage.
