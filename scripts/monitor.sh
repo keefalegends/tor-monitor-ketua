@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# monitor.sh — cek RAM, disk, dan container; kirim alert ke Telegram jika ada masalah.
+# monitor.sh — cek CPU, RAM, disk, swap, dan container; kirim alert ke Telegram.
 # Dijalankan oleh cron setiap 5 menit. Gunakan cooldown di /tmp agar tidak spam.
 
 set -euo pipefail
@@ -17,6 +17,7 @@ source "$ENV_FILE"
 
 BOT_TOKEN="${BOT_TOKEN:?Set BOT_TOKEN di .env}"
 CHAT_ID="${CHAT_ID:?Set CHAT_ID di .env}"
+CPU_THRESHOLD="${CPU_THRESHOLD:-80}"
 RAM_THRESHOLD="${RAM_THRESHOLD:-20}"
 DISK_THRESHOLD="${DISK_THRESHOLD:-85}"
 SWAP_THRESHOLD="${SWAP_THRESHOLD:-80}"
@@ -55,6 +56,41 @@ check_cooldown() {
 
 HOSTNAME_VAL=$(hostname)
 ALERTS=()
+
+# Cek CPU usage dengan membaca /proc/stat dua kali (jeda 1 detik) untuk hasil akurat.
+check_cpu() {
+    # Ambil total jiffies dan idle jiffies dari baris 'cpu' di /proc/stat.
+    local sample1 sample2
+    sample1=$(awk '/^cpu / {idle=$5; total=0; for(i=2;i<=NF;i++) total+=$i; print total, idle}' /proc/stat)
+    sleep 1
+    sample2=$(awk '/^cpu / {idle=$5; total=0; for(i=2;i<=NF;i++) total+=$i; print total, idle}' /proc/stat)
+
+    local total1 idle1 total2 idle2 delta_total delta_idle pct_used
+    total1=$(awk '{print $1}' <<< "$sample1")
+    idle1=$( awk '{print $2}' <<< "$sample1")
+    total2=$(awk '{print $1}' <<< "$sample2")
+    idle2=$( awk '{print $2}' <<< "$sample2")
+
+    delta_total=$(( total2 - total1 ))
+    delta_idle=$(( idle2  - idle1 ))
+
+    # Guard division by zero jika sample identik.
+    if (( delta_total == 0 )); then
+        return
+    fi
+
+    pct_used=$(( (delta_total - delta_idle) * 100 / delta_total ))
+
+    if (( pct_used > CPU_THRESHOLD )); then
+        if check_cooldown "cpu_spike"; then
+            local load_avg
+            load_avg=$(uptime | awk -F'load average:' '{print $2}' | xargs)
+            ALERTS+=("🔥 <b>CPU Spike</b> — terpakai ${pct_used}%. Load avg: ${load_avg}. Ambang: ${CPU_THRESHOLD}%")
+        fi
+    else
+        rm -f "${COOLDOWN_DIR}/cpu_spike"
+    fi
+}
 
 # Cek RAM available (persen)
 check_ram() {
@@ -150,6 +186,7 @@ check_containers() {
     done < <(docker ps -a --format '{{.Names}}|{{.State}}|{{.Health}}' 2>/dev/null)
 }
 
+check_cpu
 check_ram
 check_disk
 check_swap
