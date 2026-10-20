@@ -1,6 +1,6 @@
 # tor-monitor-ketua
 
-Monitor ringan untuk VPS Ubuntu menggunakan Bash + Telegram Bot API.  `curl` dan `cron`.
+Monitor ringan untuk VPS Ubuntu menggunakan Bash + Python + Telegram Bot API. Tanpa Prometheus, tanpa Grafana, cukup `curl`, `cron`, dan Python kecil.
 
 ## Fitur
 
@@ -13,26 +13,30 @@ Monitor ringan untuk VPS Ubuntu menggunakan Bash + Telegram Bot API.  `curl` dan
 | Alert login SSH | Kirim IP + waktu saat ada sesi SSH baru |
 | Laporan harian | Ringkasan uptime, RAM, disk, dan daftar container jam 07.00 |
 | Cooldown anti-spam | Setiap alert punya cooldown 1 jam (configurable) |
+| Bot interaktif | `/status` dan `/containers` on-demand dari Telegram |
 
 ## Struktur Repo
 
 ```
 tor-monitor-ketua/
 ├── scripts/
-│   ├── monitor.sh          # Cek RAM, disk, swap, container
+│   ├── monitor.sh          # Cek RAM, disk, swap, container (cron)
 │   ├── daily-report.sh     # Laporan harian ke Telegram
-│   └── ssh-login-alert.sh  # Alert login SSH
-├── systemd/                # (untuk pengembangan selanjutnya)
+│   ├── ssh-login-alert.sh  # Alert login SSH
+│   └── bot.py              # Bot Telegram interaktif (systemd)
+├── systemd/
+│   └── tor-monitor-bot.service
 ├── docs/                   # Diagram dan screenshot
 ├── .env.example            # Template konfigurasi
-├── install.sh              # Setup otomatis
+├── install.sh              # Setup cron + SSH alert
+├── install-bot.sh          # Setup bot interaktif
 └── README.md
 ```
 
 ## Prasyarat
 
 - Ubuntu VPS (akses root)
-- `curl` terinstal
+- `curl` dan `python3` terinstal
 - Docker (opsional, untuk monitor container)
 - Telegram Bot Token — buat lewat [@BotFather](https://t.me/BotFather)
 - Chat ID — cek lewat [@userinfobot](https://t.me/userinfobot)
@@ -42,11 +46,11 @@ tor-monitor-ketua/
 ### 1. Clone repo
 
 ```bash
-git clone https://github.com/keefalegends/tor-monitor-ketua.git /opt/tor-monitor-src
-cd /opt/tor-monitor-src
+git clone https://github.com/keefalegends/tor-monitor-ketua.git
+cd tor-monitor-ketua
 ```
 
-### 2. Jalankan installer
+### 2. Setup monitor + cron
 
 ```bash
 sudo bash install.sh
@@ -58,7 +62,15 @@ Installer akan:
 - Mendaftarkan cron untuk monitor (setiap 5 menit) dan laporan harian (07.00)
 - Mengaktifkan alert login SSH via `/etc/profile.d/`
 
-### 3. Isi konfigurasi
+### 3. Setup bot interaktif
+
+```bash
+sudo bash install-bot.sh
+```
+
+Bot akan berjalan sebagai systemd service dan langsung kirim pesan ke Telegram saat aktif.
+
+### 4. Isi konfigurasi
 
 ```bash
 nano /opt/tor-monitor/.env
@@ -73,6 +85,27 @@ SWAP_THRESHOLD=80                      # alert jika swap > 80%
 COOLDOWN_SECONDS=3600                  # cooldown per alert (1 jam)
 ```
 
+## Bot Interaktif
+
+Ketik langsung di Telegram kapan saja:
+
+| Command | Fungsi |
+|---|---|
+| `/status` | RAM, disk, swap, uptime, load average |
+| `/containers` | Daftar semua container Docker dan statusnya |
+| `/help` | Daftar perintah |
+
+```bash
+# Cek status bot
+systemctl status tor-monitor-bot
+
+# Lihat log real-time
+journalctl -u tor-monitor-bot -f
+
+# Restart bot
+systemctl restart tor-monitor-bot
+```
+
 ## Cara Menguji
 
 ### Uji monitor manual
@@ -83,10 +116,7 @@ bash /opt/tor-monitor/scripts/monitor.sh
 
 ### Picu alert RAM palsu
 
-Turunkan threshold sementara, lalu jalankan:
-
 ```bash
-# Set RAM_THRESHOLD=99 sementara agar pasti alert
 RAM_THRESHOLD=99 bash /opt/tor-monitor/scripts/monitor.sh
 ```
 
@@ -97,8 +127,6 @@ DISK_THRESHOLD=1 bash /opt/tor-monitor/scripts/monitor.sh
 ```
 
 ### Picu alert container
-
-Matikan satu container sementara:
 
 ```bash
 docker stop hariyuka_frontend
@@ -116,16 +144,16 @@ bash /opt/tor-monitor/scripts/daily-report.sh
 
 Buka sesi SSH baru ke VPS — notifikasi langsung masuk ke Telegram.
 
-### Cek log
-
-```bash
-tail -f /var/log/tor-monitor.log
-```
-
 ### Reset cooldown (agar alert bisa terkirim lagi saat test)
 
 ```bash
 rm -f /tmp/tor-monitor/*
+```
+
+### Cek log
+
+```bash
+tail -f /var/log/tor-monitor.log
 ```
 
 ## Cara Kerja
@@ -133,16 +161,22 @@ rm -f /tmp/tor-monitor/*
 ```
 Cron (*/5 menit)
     └── monitor.sh
-            ├── Baca /proc/meminfo  → cek RAM %
-            ├── df -h               → cek disk %
-            ├── free                → cek swap %
-            └── docker ps -a        → cek status + health container
+            ├── /proc/meminfo  → cek RAM %
+            ├── df -h          → cek disk %
+            ├── free           → cek swap %
+            └── docker ps -a   → cek status + health container
                     │
-                    └── Jika ada masalah + cooldown belum aktif
+                    └── ada masalah + cooldown habis
                             └── curl Telegram Bot API → alert
+
+Systemd service (terus jalan)
+    └── bot.py (long-polling)
+            ├── /status      → tampilkan info sistem
+            ├── /containers  → tampilkan docker ps
+            └── /help        → daftar perintah
 ```
 
-Cooldown disimpan di `/tmp/tor-monitor/<key>` berisi timestamp terakhir alert. Saat kondisi normal kembali, file cooldown dihapus otomatis agar alert bisa muncul lagi saat masalah berikutnya.
+Cooldown disimpan di `/tmp/tor-monitor/<key>`. Saat kondisi normal kembali, file dihapus otomatis agar alert bisa muncul lagi di masalah berikutnya.
 
 ## Lisensi
 
