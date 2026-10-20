@@ -23,8 +23,15 @@ info "Mengecek Python 3..."
 command -v python3 &>/dev/null || die "python3 tidak terinstal. Jalankan: apt install python3"
 
 info "Menginstal library requests..."
-python3 -m pip install --quiet requests || \
-    die "Gagal instal requests. Coba: apt install python3-pip"
+# Coba via apt dulu (aman di Ubuntu 22.04+ yang menerapkan PEP 668).
+# Fallback ke pip --break-system-packages jika paket apt tidak tersedia.
+if apt-get install -y -qq python3-requests 2>/dev/null; then
+    info "requests terinstal via apt."
+elif python3 -m pip install --quiet --break-system-packages requests 2>/dev/null; then
+    info "requests terinstal via pip."
+else
+    die "Gagal instal requests. Coba manual: apt install python3-requests"
+fi
 
 info "Menyalin bot.py..."
 cp "${REPO_DIR}/scripts/bot.py" "${INSTALL_DIR}/scripts/bot.py"
